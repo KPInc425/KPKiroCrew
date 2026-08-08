@@ -1,0 +1,8 @@
+{
+  "host": "127.0.0.1",
+  "port": 8765,
+  "token": "CHANGE_ME_TO_A_LONG_RANDOM_SECRET",
+  "allowed_apps": ["notepad", "calc", "explorer", "spotify", "outlook"],
+  "allowed_folders": ["Documents/Kiro", "Downloads"],
+  "max_file_size_mb": 10
+}

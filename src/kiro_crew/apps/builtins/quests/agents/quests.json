@@ -1,0 +1,10 @@
+{
+  "name": "quests",
+  "description": "Quests gamification agent — manages quests, awards XP, and tracks achievements",
+  "model": "auto",
+  "tools": [
+    "@quests:quests"
+  ],
+  "includeMcpJson": false,
+  "mcpServers": {}
+}

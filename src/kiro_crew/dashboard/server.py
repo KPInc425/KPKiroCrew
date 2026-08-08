@@ -391,6 +391,7 @@ _MIXED_INTERNAL_API_PATHS = frozenset(
         "/api/spawn",
         "/api/chat",
         "/api/lessons",
+        "/api/memory/semantic",  # people.* facts via people_add_fact/people_lookup/people_list
         "/api/crons",  # CLI cron trigger; prefix covers all sub-routes (consistent with spawn/taskrunner)
         "/api/taskrunner",
         "/api/artifacts",

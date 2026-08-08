@@ -158,6 +158,7 @@ _BUILTIN_PREFIXES = [
     "project.*",
     "user.*",
     "lesson.*",
+    "people.*",
 ]
 
 # ── Schema ──

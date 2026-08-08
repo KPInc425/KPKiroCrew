@@ -16,6 +16,7 @@ Tools:
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hashlib
 import json
@@ -110,6 +111,10 @@ from kiro_crew.validation import (
     MCP_CORE_SCHEMAS,
     MONITOR_START_SCHEMA,
     MONITOR_UPDATE_SCHEMA,
+    PEOPLE_ADD_FACT_SCHEMA,
+    PEOPLE_LIST_SCHEMA,
+    PEOPLE_LOOKUP_SCHEMA,
+    PERSONALITY_FEEDBACK_SCHEMA,
     REGISTER_HOOK_SCHEMA,
     SEARCH_CHAT_HISTORY_SCHEMA,
     SELECT_CREW_SCHEMA,
@@ -657,6 +662,86 @@ def _list_tools() -> list[dict[str, Any]]:
                     "query": {"type": "string", "description": "Substring to match"},
                 },
                 "required": ["query"],
+            },
+        },
+        {
+            "name": "people_add_fact",
+            "description": (
+                "Store a structured fact about a person in long-term semantic "
+                "memory under the people.* prefix. Use when the user tells you "
+                "something about someone (a name, birthday, preference, or a "
+                "relationship to another person). Relationships are stored as a "
+                "JSON object under the 'relationships' attribute, e.g. "
+                "{\"bob\": \"coworker\"}. Names are lowercase alphanumeric "
+                "(underscores allowed). Ask before remembering a new person."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Person's name, lowercase alphanumeric (underscores allowed)",
+                    },
+                    "attribute": {
+                        "type": "string",
+                        "description": "Fact attribute, e.g. name, birthday, relationship, aliases",
+                    },
+                    "value": {
+                        "type": ["string", "number", "boolean", "object", "array", "null"],
+                        "description": "The fact value: a string, number, or JSON object",
+                    },
+                },
+                "required": ["name", "attribute", "value"],
+            },
+        },
+        {
+            "name": "people_lookup",
+            "description": (
+                "Retrieve everything known about a person (their dossier) from "
+                "semantic memory. Call when a person is mentioned in the "
+                "conversation. Returns all people.<name>.* facts. To resolve an "
+                "alias, read the 'aliases' attribute and look up each alias as a "
+                "name too."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Person's name, lowercase alphanumeric (underscores allowed)",
+                    },
+                },
+                "required": ["name"],
+            },
+        },
+        {
+            "name": "people_list",
+            "description": "List all people currently known in semantic memory.",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "personality_feedback",
+            "description": (
+                "Record user feedback on whether the last response was helpful. "
+                "Ask the user 'was that helpful?' and use this tool with their "
+                "rating (1=not helpful, 5=very helpful). Only ask occasionally, "
+                "not every turn."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "rating": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 5,
+                        "description": "User rating: 1=not helpful, 5=very helpful",
+                    },
+                    "note": {
+                        "type": "string",
+                        "description": "Optional free-text reason for the rating",
+                    },
+                },
+                "required": ["rating"],
             },
         },
         {
@@ -6312,6 +6397,87 @@ def _call_tool_inner(name: str, args: dict[str, Any]) -> str:
             f"(replaying calls before index {d.get('replayed_before')}). "
             f"Monitor with workflow_status('{d.get('run_id')}').",
         )
+
+    if name == "people_add_fact":
+        args = validate_tool_args(args, PEOPLE_ADD_FACT_SCHEMA)
+        # STRICT resolution (env-var only, no PID walk): writing a durable
+        # people fact mutates persistent semantic memory, and a subagent under
+        # the parent's process tree must not be able to PID-walk into the
+        # parent's identity and write facts on the parent's behalf.
+        sk = _resolve_session_key_strict()
+        if not sk:
+            return "Error: people_add_fact requires a verified session identity"
+        person = str(args["name"]).strip().lower()
+        attribute = str(args["attribute"]).strip().lower()
+        value = args["value"]
+        key = f"people.{person}.{attribute}"
+        d = _put(
+            "/api/memory/semantic",
+            {"key": key, "value": value, "confidence": 1.0, "source": "user_explicit"},
+        )
+        if d.get("error"):
+            return f"Error: {d['error']}"
+        return f"Saved people fact: {key}"
+
+    if name == "people_lookup":
+        args = validate_tool_args(args, PEOPLE_LOOKUP_SCHEMA)
+        person = str(args["name"]).strip().lower()
+        d = _get("/api/memory/semantic?limit=1000")
+        if d.get("error"):
+            return f"Error: {d['error']}"
+        prefix = f"people.{person}."
+        facts = []
+        for entry in d.get("entries", []):
+            key = entry.get("key", "")
+            if not key.startswith(prefix):
+                continue
+            try:
+                val = json.loads(entry.get("value_json", "null"))
+            except (TypeError, ValueError):
+                val = entry.get("value_json")
+            facts.append(f"{key} = {json.dumps(val)}")
+        if not facts:
+            return f"No facts known about '{person}'."
+        return "Dossier for " + person + ":\n" + "\n".join(facts)
+
+    if name == "people_list":
+        args = validate_tool_args(args, PEOPLE_LIST_SCHEMA)
+        d = _get("/api/memory/semantic?limit=1000")
+        if d.get("error"):
+            return f"Error: {d['error']}"
+        names = set()
+        for entry in d.get("entries", []):
+            key = entry.get("key", "")
+            if key.startswith("people."):
+                name = key[len("people."):].split(".", 1)[0]
+                if name:
+                    names.add(name)
+        if not names:
+            return "No people are known yet."
+        return "Known people:\n" + "\n".join(sorted(names))
+
+    if name == "personality_feedback":
+        args = validate_tool_args(args, PERSONALITY_FEEDBACK_SCHEMA)
+        # STRICT resolution (env-var only, no PID walk): recording feedback
+        # mutates the session's persistent feedback store, and a subagent under
+        # the parent's process tree must not be able to PID-walk into the
+        # parent's identity and record feedback on the parent's behalf.
+        sk = _resolve_session_key_strict()
+        if not sk:
+            return "Error: personality_feedback requires a verified session identity"
+        rating = int(args["rating"])
+        note = args.get("note", "")
+        try:
+            from kiro_crew.personality import FeedbackCollector
+
+            collector = FeedbackCollector(config_dir())
+            # The MCP worker thread has no running event loop, so asyncio.run is
+            # safe here — the same sync->async bridge the codebase uses in
+            # worker threads (e.g. SessionAgentRunner.run).
+            asyncio.run(collector.record_feedback(sk, rating, note))
+        except Exception as e:
+            return f"Error: failed to record feedback: {e}"
+        return f"Feedback recorded (rating {rating}/5) for session {sk!r}."
 
     return f"Unknown tool: {name}"
 

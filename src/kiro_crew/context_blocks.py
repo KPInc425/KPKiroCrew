@@ -33,6 +33,7 @@ UNCLASSIFIED_LABEL: Final = "unclassified"
 _MARKERS: Final[tuple[tuple[str, str], ...]] = (
     ("critical_rules", r"\[CRITICAL RULES"),
     ("agent_instructions", r"\[AGENT SYSTEM PROMPT\]"),
+    ("personality", r"## Companion Personality"),
     ("session_wrapper", r"\[SESSION CONTEXT"),
     ("date", r"\[CURRENT DATE\]"),
     ("agent_identity", r"\[CURRENT AGENT\]"),

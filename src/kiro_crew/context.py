@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from kiro_crew import model_registry
 from kiro_crew.agent import _prompt_path
 from kiro_crew.agent_discovery import agent_skill_globs
-from kiro_crew.config.loader import KiroCrewConfig, workspace_dir_for
+from kiro_crew.config.loader import KiroCrewConfig, config_dir, workspace_dir_for
 from kiro_crew.config.paths import kiro_agents_dir
 from kiro_crew.cron import get_local_tz
 from kiro_crew.hooks import (
@@ -1483,6 +1483,26 @@ class ContextBuilder:
         else:
             verbosity_block = ""
         prompt = prompt.replace("{{VERBOSITY_BLOCK}}", verbosity_block)
+
+        # Adaptive personality: interpolate the current behavior-dial values at
+        # the {personality_block} placeholder. Fails safe to an empty string
+        # when the dials file is missing or cannot be loaded so prompt assembly
+        # never breaks because of a personality rendering problem. The dials
+        # file is a keystone leaf — the backend opens it directly, not via
+        # is_sensitive_path.
+        if "{personality_block}" in prompt:
+            try:
+                from kiro_crew.personality import load_dials, render_personality_block
+
+                dials_path = config_dir() / "personality_dials.json"
+                block = (
+                    render_personality_block(load_dials(config_dir()))
+                    if dials_path.exists()
+                    else ""
+                )
+            except Exception:
+                block = ""
+            prompt = prompt.replace("{personality_block}", block)
 
         # Widgets and artifacts need a chat window to render in, which is a
         # property of where the session is DISPLAYED, not where it started: a
