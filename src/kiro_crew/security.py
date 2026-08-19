@@ -5026,6 +5026,15 @@ _CREW_SECRET_LEAVES: list[str] = [
     # #2351). The verb-independent sensitive-path backstop covers a scripted
     # ``python -c "open('~/.kiro/crew/.vault/...')"`` too.
     ".vault",
+    # Adaptive personality: the behavior dials and the feedback store are the
+    # agent's OWN personality configuration. A prompt-injected agent that could
+    # rewrite them could nudge its own warmth up and its caution down, or erase
+    # the negative feedback that would correct it — so they sit on the read+write
+    # keystone floor like every other trust root. Only the operator (dashboard/
+    # config) and the internal feedback cron open them directly, never through
+    # this gate.
+    "personality_dials.json",
+    "personality_feedback.json",
 ]
 _SENSITIVE_HOME_DIRS += [
     f"{prefix}/{leaf}" for prefix in _CREW_HOME_PREFIXES for leaf in _CREW_SECRET_LEAVES
@@ -5265,6 +5274,12 @@ _WRITE_PROTECTED_BASH_LEAVES: tuple[str, ...] = (
     # re-converges it. The residual ``cd``-relative form is the low-severity case
     # the scope note already accepts on purpose.
     "playwright-cli-config.json",
+    # Adaptive personality files. Defense-in-depth: they are already on the
+    # read+write keystone floor (_CREW_SECRET_LEAVES), so the sensitive-dir bash
+    # matcher already blocks every shell read/write of them; these entries keep
+    # the write-protected leaf list self-documenting for the personality system.
+    "personality_dials.json",
+    "personality_feedback.json",
 )
 
 # ── Anchor-INDEPENDENT leaf matching ──

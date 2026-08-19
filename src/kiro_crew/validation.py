@@ -1068,6 +1068,45 @@ LEARN_REMOVE_SCHEMA = ToolSchema(
     ],
 )
 
+# Person names in ``people.*`` semantic keys must be lowercase alphanumeric
+# (underscores allowed) so the assembled key matches the semantic key grammar
+# (``_KEY_PATTERN`` in vector_memory.py). The people-memory skill normalizes
+# display names to this form before writing.
+_PEOPLE_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+
+PEOPLE_ADD_FACT_SCHEMA = ToolSchema(
+    tool_name="people_add_fact",
+    fields=[
+        FieldSpec("name", str, required=True, max_len=MAX_SHORT_STRING, pattern=_PEOPLE_NAME_RE),
+        FieldSpec("attribute", str, required=True, max_len=MAX_SHORT_STRING, pattern=_PEOPLE_NAME_RE),
+        # ``value`` is any JSON value (string, number, bool, dict, list, null).
+        # The backend ``set_semantic`` enforces the 4 KB value cap and the
+        # prompt-injection screen, so no size bound is needed here.
+        FieldSpec("value", object, required=True),
+    ],
+)
+
+PEOPLE_LOOKUP_SCHEMA = ToolSchema(
+    tool_name="people_lookup",
+    fields=[
+        FieldSpec("name", str, required=True, max_len=MAX_SHORT_STRING, pattern=_PEOPLE_NAME_RE),
+    ],
+)
+
+PEOPLE_LIST_SCHEMA = ToolSchema(tool_name="people_list")
+
+# personality_feedback records a user's "was that helpful?" rating (1-5) for
+# the adaptive personality feedback loop. The rating is required and bounded to
+# 1-5; the note is an optional free-text reason. The handler clamps the rating
+# again as defense-in-depth, but the schema is the primary bound.
+PERSONALITY_FEEDBACK_SCHEMA = ToolSchema(
+    tool_name="personality_feedback",
+    fields=[
+        FieldSpec("rating", int, required=True, min_val=1, max_val=5),
+        FieldSpec("note", str, max_len=MAX_SHORT_STRING),
+    ],
+)
+
 SPAWN_STATUS_SCHEMA = ToolSchema(
     tool_name="spawn_status",
     fields=[
@@ -2523,6 +2562,10 @@ MCP_CORE_SCHEMAS: dict[str, ToolSchema] = {
     "spawn_status": SPAWN_STATUS_SCHEMA,
     "learn_add": LEARN_ADD_SCHEMA,
     "learn_remove": LEARN_REMOVE_SCHEMA,
+    "people_add_fact": PEOPLE_ADD_FACT_SCHEMA,
+    "people_lookup": PEOPLE_LOOKUP_SCHEMA,
+    "people_list": PEOPLE_LIST_SCHEMA,
+    "personality_feedback": PERSONALITY_FEEDBACK_SCHEMA,
     "skill_search": SKILL_SEARCH_SCHEMA,
     "skill_discover": SKILL_DISCOVER_SCHEMA,
     "skill_fetch": SKILL_FETCH_SCHEMA,

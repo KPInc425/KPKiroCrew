@@ -4098,6 +4098,31 @@
         "page_label": "Task Runner"
       }
     },
+    "quests": {
+      "manifest": {
+        "description": "A gamification layer that turns your goals and habits into quests, awards XP for completing them, and tracks your level and achievements.",
+        "display_name": "Quests",
+        "highlight_1": "Turns goals and habits into themed quests with objectives",
+        "highlight_2": "Awards XP for completing quests and tracks a level/title progression",
+        "highlight_3": "Unlocks achievements as you hit milestones",
+        "highlight_4": "Single-user, local-first: all state lives under the app data dir",
+        "page_label": "Quests"
+      },
+      "questsPage": {
+        "achievements": "Achievements",
+        "active_quests": "Active Quests",
+        "complete_objective": "Complete",
+        "complete_quest": "Complete quest",
+        "completed_quests": "Completed",
+        "error": "Something went wrong",
+        "level": "Level {{level}}",
+        "no_achievements": "No achievements yet.",
+        "no_active_quests": "No active quests yet.",
+        "no_completed_quests": "No completed quests yet.",
+        "xp": "{{xp}} XP",
+        "xp_reward": "{{xp}} XP"
+      }
+    },
     "specBuilder": {
       "api": {
         "phase_building": "in costruzione",

@@ -316,6 +316,17 @@ export const APP_MANIFEST_KEY: Record<string, ManifestKeys> = {
       'apps.projects.manifest.highlight_5',
     ],
   },
+  'quests': {
+    displayName: 'apps.quests.manifest.display_name',
+    description: 'apps.quests.manifest.description',
+    pageLabel: 'apps.quests.manifest.page_label',
+    highlights: [
+      'apps.quests.manifest.highlight_1',
+      'apps.quests.manifest.highlight_2',
+      'apps.quests.manifest.highlight_3',
+      'apps.quests.manifest.highlight_4',
+    ],
+  },
   // `spec-builder` ships no `highlights`, so its list is empty on both sides and
   // `appHighlights()` returns the manifest's own empty array. An entry is still
   // required: the sync gate derives keys from the app id, not from this table.

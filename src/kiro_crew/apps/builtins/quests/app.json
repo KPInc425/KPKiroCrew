@@ -1,0 +1,61 @@
+{
+  "name": "quests",
+  "version": "0.1.0",
+  "displayName": "Quests",
+  "description": "A gamification layer that turns your goals and habits into quests, awards XP for completing them, and tracks your level and achievements.",
+  "author": "kirocrew",
+  "tags": [
+    "gamification",
+    "quests",
+    "xp",
+    "achievements",
+    "productivity"
+  ],
+  "highlights": [
+    "Turns goals and habits into themed quests with objectives",
+    "Awards XP for completing quests and tracks a level/title progression",
+    "Unlocks achievements as you hit milestones",
+    "Single-user, local-first: all state lives under the app data dir"
+  ],
+  "defaultEnabled": false,
+  "platform": {
+    "requiresDesktopApp": false
+  },
+  "permissions": {
+    "api": [
+      "/api/apps/quests",
+      "/api/apps/quests/*"
+    ],
+    "storage": true,
+    "events": [],
+    "cron": false,
+    "spawn": false
+  },
+  "ui": {
+    "pages": [
+      {
+        "route": "/quests",
+        "label": "Quests",
+        "icon": "Trophy"
+      }
+    ]
+  },
+  "backend": {
+    "routes": "backend.routes:register_routes"
+  },
+  "agents": [
+    "agents/quests.json"
+  ],
+  "skills": [],
+  "mcpServers": {
+    "quests": {
+      "command": "kirocrew",
+      "args": [
+        "app",
+        "mcp",
+        "quests"
+      ],
+      "disabled": false
+    }
+  }
+}
