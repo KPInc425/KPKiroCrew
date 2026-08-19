@@ -515,6 +515,13 @@ _MIXED_INTERNAL_API_PATHS = frozenset(
         # Redundant under the prefix match above, kept explicit so a reader of
         # this list sees both routes the MCP tools actually call.
         "/api/skills/-/discover/preview",
+        # Semantic memory — the people.* fact store read/written by the
+        # ``people_add_fact`` / ``people_lookup`` / ``people_list`` MCP tools. A
+        # chat agent has no dashboard token, so without this entry those calls
+        # would 403 (same model as the Issue Radar crew ledger above). The PUT
+        # (people_add_fact) is the write leg and deliberately goes through
+        # strict session identity; the GET legs are read-only.
+        "/api/memory/semantic",
         "/v1/chat/completions",  # OpenAI-compat API
     }
 )
