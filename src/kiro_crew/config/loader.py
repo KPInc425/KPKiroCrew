@@ -1272,6 +1272,65 @@ DEFAULT_CWD_ALLOWED_ROOTS = [
 
 
 @dataclass
+class OpenAICompatibleConfig:
+    """OpenAI-compatible endpoint settings for the optional agent provider.
+
+    ``agent.provider`` stays ``enum=["acp"]`` (harness-parity H2) even when this
+    section is enabled: selection happens through the ``ProviderRegistry`` seam,
+    never a second ``agent.provider`` value. When ``enabled`` is true, a custom
+    registry returns an ``OpenAICompatibleProvider`` factory instead of the ACP
+    factory; the Kiro path itself is untouched (H13).
+
+    ``api_key`` may be empty for endpoints that need none (local Ollama); the
+    Authorization header is only sent when it is non-empty. ``base_url`` should
+    be the API root WITHOUT a trailing ``/v1`` (the provider appends
+    ``/chat/completions``), e.g. ``http://localhost:11434/v1``.
+    """
+
+    enabled: bool = field(
+        default=False,
+        metadata=_meta(
+            "OpenAI-Compatible Provider",
+            "Use an OpenAI-compatible endpoint for the agent model instead of "
+            "kiro-cli / Bedrock. When on, a ProviderRegistry seam swaps the "
+            "factory; agent.provider stays 'acp' (harness-parity H2).",
+        ),
+    )
+    base_url: str = field(
+        default="",
+        metadata=_meta(
+            "Base URL",
+            "OpenAI-compatible API root, e.g. http://localhost:11434/v1 (Ollama) "
+            "or https://api.openai.com/v1. The provider appends /chat/completions.",
+        ),
+    )
+    api_key: str = field(
+        default="",
+        metadata=_meta(
+            "API Key",
+            "Bearer token for the endpoint. May be empty for local endpoints "
+            "that need none (Ollama). Stored in config.json like other keys.",
+        ),
+    )
+    model: str = field(
+        default="",
+        metadata=_meta(
+            "Model",
+            "Model id to request from the endpoint, e.g. qwen2.5-coder:32b or "
+            "gpt-4o. Empty falls back to the endpoint default.",
+        ),
+    )
+    context_window: int = field(
+        default=0,
+        metadata=_meta(
+            "Context Window (tokens)",
+            "Model context window in tokens, used for the dashboard token text "
+            "and auto-compaction heuristics. 0 = unknown.",
+        ),
+    )
+
+
+@dataclass
 class AgentConfig:
     approval_mode: str = field(
         default="auto",
@@ -1320,6 +1379,14 @@ class AgentConfig:
     provider: str = field(
         default="acp",
         metadata=_meta("Provider", "LLM provider backend (KiroACP / kiro-cli).", enum=["acp"]),
+    )
+    openai_compatible: OpenAICompatibleConfig = field(
+        default_factory=OpenAICompatibleConfig,
+        metadata=_meta(
+            "OpenAI-Compatible",
+            "Optional OpenAI-compatible endpoint backend (see OpenAICompatibleConfig). "
+            "Selected via the ProviderRegistry seam; agent.provider stays 'acp'.",
+        ),
     )
     mcp_registry_mode: bool = field(
         default=False,
@@ -4187,6 +4254,24 @@ def _normalize_acp_backend(value: object) -> str:
     return ACP_BACKEND_KIRO
 
 
+def _parse_openai_compatible(value: object) -> OpenAICompatibleConfig:
+    """Parse the optional ``agent.openai_compatible`` section defensively.
+
+    ``config.json`` is operator-editable, so every field degrades to its default
+    on junk rather than raising at boot. ``enabled`` fails safe to False (the
+    Kiro path stays selected) on anything that is not a real boolean.
+    """
+    if not isinstance(value, dict):
+        return OpenAICompatibleConfig()
+    cfg = OpenAICompatibleConfig()
+    cfg.enabled = _safe_bool(value.get("enabled", False), False)
+    cfg.base_url = str(value.get("base_url", "") or "").strip()
+    cfg.api_key = str(value.get("api_key", "") or "")
+    cfg.model = str(value.get("model", "") or "").strip()
+    cfg.context_window = _safe_int(value.get("context_window", 0), 0, lo=0)
+    return cfg
+
+
 def _validate_activation(value: str) -> str:
     """Return *value* if it is a valid activation mode, else ``mention`` (deny-by-default)."""
     return value if value in _VALID_ACTIVATIONS else ACTIVATION_MENTION
@@ -6414,6 +6499,7 @@ class KiroCrewConfig:
                 role_efforts=coerce_role_efforts(agent_data.get("role_efforts")),
                 reasoning_effort=agent_data.get("reasoning_effort", ""),
                 provider=agent_data.get("provider", "acp"),
+                openai_compatible=_parse_openai_compatible(agent_data.get("openai_compatible")),
                 mcp_registry_mode=_safe_bool(agent_data.get("mcp_registry_mode", False), False),
                 acp_backend=_normalize_acp_backend(agent_data.get("acp_backend")),
                 default_agent=agent_data.get("default_agent", ""),

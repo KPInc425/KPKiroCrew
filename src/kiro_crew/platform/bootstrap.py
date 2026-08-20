@@ -58,6 +58,7 @@ from kiro_crew.platform.security_authority import PolicyAuthority, assert_securi
 
 if TYPE_CHECKING:
     from kiro_crew.config.loader import KiroCrewConfig
+    from kiro_crew.platform.interfaces import ProviderRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,26 @@ def _reset_boot_state() -> None:
         _BOOTED = False
 
 
+def _select_provider_registry(cfg: "KiroCrewConfig") -> "ProviderRegistry":
+    """Return the active ProviderRegistry for *cfg*.
+
+    The OpenAI-compatible backend is selected by the ``agent.openai_compatible``
+    config section, NOT by a second ``agent.provider`` value (H2). When the
+    section is disabled (default) or unusable, this returns the stock
+    ``DefaultProviderRegistry`` — the Kiro path is byte-identical. When enabled,
+    it returns the ``OpenAICompatibleRegistry``, which still delegates to the
+    default when its own section is off. The registry is the additive seam (H13):
+    upstream provider work reconciles against it.
+    """
+    oc = getattr(getattr(cfg, "agent", None), "openai_compatible", None)
+    if oc is not None and oc.enabled:
+        from kiro_crew.platform.openai_registry import OpenAICompatibleRegistry
+
+        logger.info("Selecting OpenAI-compatible provider registry")
+        return OpenAICompatibleRegistry()
+    return DefaultProviderRegistry()
+
+
 def build_default_context(
     cfg: "KiroCrewConfig", *, profile: str = PROFILE_STANDALONE
 ) -> PlatformContext:
@@ -120,11 +141,12 @@ def build_default_context(
     the standalone load does not consult a bundled resource here.
     """
     governance = load_security_policy()
+    providers = _select_provider_registry(cfg)
     return PlatformContext(
         contract_version=CONTRACT_VERSION,
         profile=profile,
         cfg=cfg,
-        providers=DefaultProviderRegistry(),
+        providers=providers,
         publish=DefaultPublishRegistry(),
         agent_runtime=DefaultAgentRuntime(),
         agent_executable=DefaultAgentExecutableResolver(),

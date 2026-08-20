@@ -33,6 +33,27 @@ but the public provider factory never selects it — `kiro-cli` is the only
 backend.
 See [`../features/claude-code-provider.md`](../features/claude-code-provider.md).
 
+### Optional OpenAI-compatible backend
+
+A self-contained `OpenAICompatibleProvider` (`providers/openai_compatible.py`)
+implements the same `LLMProvider` ABC against any OpenAI-compatible
+`/v1/chat/completions` endpoint (Ollama, vLLM, LiteLLM, Together, Groq,
+OpenRouter, Azure OpenAI, a self-hosted proxy). It is a **separate opt-in**
+selected by the `agent.openai_compatible` config section (`enabled`, `base_url`,
+`api_key`, `model`, `context_window`) through the `ProviderRegistry` seam
+(`platform/openai_registry.py`) — **not** by a second `agent.provider` value,
+which stays `enum=["acp"]` (harness-parity H2/H13). When the section is
+disabled (default) the registry delegates to the stock `DefaultProviderRegistry`
+and the Kiro path is unchanged.
+
+**Security:** every tool call passes through the same
+`HookManager.on_tool_call` gate the ACP path uses, via `GatedToolExecutor`
+(`providers/openai_compatible_tools.py`). Denied-command rules, sensitive-path /
+credential-read blocks, and the governance ceiling apply exactly as they do to
+kiro-cli — a provider that executed tools without this gate would let the agent
+read/write its own ceiling. Only `execute_bash` ships as a gated handler today;
+other tools return "not implemented" until handlers are added.
+
 ### LLMProvider ABC (`providers/base.py`)
 
 ```python
