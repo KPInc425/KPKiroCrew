@@ -4,24 +4,24 @@
 
 ## Problem
 
-KiroCrew drives a single LLM backend: `kiro-cli` over ACP, which routes the
+Kiro Crew drives a single LLM backend: `kiro-cli` over ACP, which routes the
 model through Amazon Bedrock. The operator has their own OpenAI-compatible
 providers (Ollama, vLLM, LiteLLM, OpenAI, Groq, …) and does not want to use
 Bedrock (rate limits / subscription). There is currently no way to point the
 agent model at an OpenAI-compatible endpoint. A third-party monkey-patch
 (`lenovo1996/KiroCrew-OpenAI-Compatible`) exists but **reimplements tool
-execution without calling KiroCrew's own security gate** — it breaks the
+execution without calling Kiro Crew's own security gate** — it breaks the
 keystone invariant (agent could read `~/.aws`, `~/.ssh`, `security_policy.json`).
 
 Goal: a **proper, additive** OpenAI-compatible provider that keeps every tool
-call behind KiroCrew's own `hooks.on_tool_call` gate, and that merges cleanly
+call behind Kiro Crew's own `hooks.on_tool_call` gate, and that merges cleanly
 when upstream lands its own provider abstraction (kirodotdev/KiroCrew#1693).
 
 ## Constraints that shape the design
 
 1. **`agent.provider` stays `enum=["acp"]` (H2).** `test_harness_parity.py::test_provider_enum_is_acp_only` pins it. A second `agent.provider` value would build the factory outside `create_provider_factory` and route around every harness-parity invariant below it. Selection must ride a **separate config field + a custom `ProviderRegistry`**, never a new `agent.provider` member.
 2. **H13: registration is additive at the `ProviderRegistry` seam.** `DefaultProviderRegistry.create_factory(cfg)` is identity → `cfg.create_provider_factory()`; a new registry returns the OpenAI factory when its config flag is on, else delegates to the Kiro path. The Kiro construction path gains no conditional, no new required argument, no new failure mode.
-3. **KiroCrew does NOT execute tools — kiro-cli does.** The security gate `hooks.on_tool_call` runs on the `EVENT_PERMISSION_REQUEST` branch in `chat_runner._run_chat` (L5493) and *approves or rejects only*. The workaround reimplements `execute_bash`/`read`/`write`/`edit` with raw `subprocess`/`Path` calls and never calls the gate. The port must route every tool call through the same gate before executing.
+3. **Kiro Crew does NOT execute tools — kiro-cli does.** The security gate `hooks.on_tool_call` runs on the `EVENT_PERMISSION_REQUEST` branch in `chat_runner._run_chat` (L5493) and *approves or rejects only*. The workaround reimplements `execute_bash`/`read`/`write`/`edit` with raw `subprocess`/`Path` calls and never calls the gate. The port must route every tool call through the same gate before executing.
 4. **Keystone.** `security_policy.json`, `profiles/`, `admission_policy.json`, `computer_use.json`, and the new personality files are on `security._SENSITIVE_HOME_DIRS`. The provider's gated executor must preserve `is_sensitive_path` / `is_sensitive_bash_command` enforcement exactly as the ACP path does.
 
 ## Decision
@@ -53,7 +53,7 @@ tools unsafely, loses session persistence); waiting for upstream #1693 (indefini
    arguments as `chat_runner._run_chat` (L5493): `tool_name`, `session_key`,
    `agent`, `app`, `tool_kind`, `raw_params`, `command`, `is_shell`,
    `mcp_server_name`, `mcp_tool_name`, `resolved_agent`. Deny on `TOOL_DENY`,
-   else execute. Reuses KiroCrew's existing executors (sandbox wrap, atomic
+   else execute. Reuses Kiro Crew's existing executors (sandbox wrap, atomic
    writes) rather than reimplementing where possible.
 3. **Config** — new `agent.openai_compatible` section in `config/loader.py`
    (`AgentConfig`): `{enabled: bool, base_url, api_key, model, context_window}`.

@@ -18,6 +18,7 @@ reconcile against it, and the provider/tool modules merge untouched.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Callable
 
@@ -104,8 +105,10 @@ def _default_tool_handler() -> Callable[..., Any]:
                 return "[Error: command required]"
             # Route the spawn through Kiro Crew's sandbox/limits rather than a
             # bare subprocess call, keeping resource ceilings on the agent.
-            proc = await _popen_limited(cmd, bash)
-            stdout, stderr = await proc.communicate()
+            # ``popen_limited`` returns a synchronous Popen, so its
+            # ``communicate()`` must run off the event loop.
+            proc = _popen_limited(cmd, bash)
+            stdout, stderr = await asyncio.to_thread(proc.communicate)
             out = stdout.decode(errors="replace")
             err = stderr.decode(errors="replace")
             if err:
@@ -118,9 +121,10 @@ def _default_tool_handler() -> Callable[..., Any]:
     return _run
 
 
-async def _popen_limited(cmd: str, bash: str | None):
-    """Spawn a bounded shell process for a gated bash command."""
+def _popen_limited(cmd: str, bash: str | None):
+    """Build a bounded shell process for a gated bash command."""
     import shlex
+    import subprocess
 
     from kiro_crew.sandbox import popen_limited
 
@@ -128,4 +132,8 @@ async def _popen_limited(cmd: str, bash: str | None):
         argv = [bash, "-c", cmd]
     else:
         argv = shlex.split(cmd)
-    return popen_limited(argv)
+    return popen_limited(
+        argv,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
