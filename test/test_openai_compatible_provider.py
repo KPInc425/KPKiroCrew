@@ -30,6 +30,34 @@ from kiro_crew.platform.bootstrap import _select_provider_registry
 from kiro_crew.platform.defaults import DefaultProviderRegistry
 
 
+class TestOpenAICompatibleMasking:
+    def test_api_key_is_masked_in_dashboard_response(self):
+        from kiro_crew.dashboard.handlers.core import _SENSITIVE_MASK, _masked_config_dict
+
+        cfg = KiroCrewConfig()
+        cfg.agent.openai_compatible.api_key = "sk-secret-not-for-the-browser"
+        masked = _masked_config_dict(cfg)
+        assert masked["agent"]["openai_compatible"]["api_key"] == _SENSITIVE_MASK
+        assert "sk-secret" not in str(masked)
+
+    def test_unset_api_key_stays_empty(self):
+        from kiro_crew.dashboard.handlers.core import _SENSITIVE_MASK, _masked_config_dict
+
+        cfg = KiroCrewConfig()
+        masked = _masked_config_dict(cfg)
+        assert masked["agent"]["openai_compatible"]["api_key"] == ""
+        assert _SENSITIVE_MASK not in str(masked)
+
+    def test_patch_accepts_openai_compatible_keys(self):
+        from kiro_crew.dashboard.handlers.core import _EDITABLE_CONFIG
+
+        assert "agent.openai_compatible.enabled" in _EDITABLE_CONFIG
+        assert _EDITABLE_CONFIG["agent.openai_compatible.enabled"]["type"] == "bool"
+        assert "agent.openai_compatible.base_url" in _EDITABLE_CONFIG
+        assert "agent.openai_compatible.api_key" in _EDITABLE_CONFIG
+        assert _EDITABLE_CONFIG["agent.openai_compatible.api_key"]["type"] == "str"
+
+
 class TestProviderRegistrySelection:
     def test_default_config_selects_default_registry(self):
         assert isinstance(_select_provider_registry(KiroCrewConfig()), DefaultProviderRegistry)

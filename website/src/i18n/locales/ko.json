@@ -10654,7 +10654,22 @@
         "which_model_new_sessions_start_with_pick_a_model": "에이전트가 모델을 고정하지 않았을 때 새 세션이 시작할 모델입니다. 에이전트 기능 → 에이전트에서 에이전트별로 모델을 설정하거나, 세션 안에서 모델을 선택해 재정의하세요.",
         "which_part_of_a_subagent_s_stream_to_keep_when_i": "서브에이전트의 완료 이벤트를 상위 세션에 삽입할 때 스트림의 어느 부분을 유지할지 결정합니다. ‘앞부분’은 스트림 시작을 유지합니다(기본값, 기존 동작과 동일). ‘끝부분’은 최종 요약을 유지합니다. ‘양쪽’은 양 끝에서 일부를 유지하고 그 사이에 표시를 넣습니다.",
         "widget_density": "위젯 밀도",
-        "your_role": "사용자 역할"
+        "your_role": "사용자 역할",
+        "openai_compatible_endpoint": "OpenAI-Compatible Endpoint",
+        "use_openai_compatible_endpoint": "Use an OpenAI-compatible endpoint",
+        "route_the_agent_model_to_any_v1_chat_comple": "Route the agent model to any /v1/chat/completions endpoint (Ollama, vLLM, LiteLLM, etc.) instead of kiro-cli / Bedrock. Takes effect on the next gateway start.",
+        "base_url": "Base URL",
+        "ollama_example_http_localhost_11434_v1": "e.g. http://localhost:11434/v1 (Ollama) or https://api.openai.com/v1",
+        "api_key": "API Key",
+        "api_key_placeholder": "Enter API key (leave blank for endpoints that need none)",
+        "optional_for_local_endpoints_that_need_none": "Optional — local endpoints like Ollama need no key. Masked in the dashboard.",
+        "model_id": "Model ID",
+        "model_name_your_endpoint_expects": "Model name your endpoint expects (e.g. qwen2.5:14b, gpt-4o). Empty falls back to the endpoint default.",
+        "model_id_placeholder": "e.g. qwen2.5:14b",
+        "context_window_tokens": "Context Window (tokens)",
+        "optional_context_window_in_tokens_0_unknown": "Optional model context window in tokens, used for the token meter. 0 = unknown.",
+        "openai_compatible_restart_hint": "Toggling this provider requires a gateway restart. Endpoint fields apply to new sessions after saving.",
+        "failed_to_save_openai_compatible": "Failed to save the OpenAI-compatible endpoint settings."
       },
       "computerUsePanel": {
         "accessibility": "손쉬운 사용",

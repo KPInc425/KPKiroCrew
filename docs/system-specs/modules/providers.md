@@ -44,7 +44,13 @@ selected by the `agent.openai_compatible` config section (`enabled`, `base_url`,
 (`platform/openai_registry.py`) — **not** by a second `agent.provider` value,
 which stays `enum=["acp"]` (harness-parity H2/H13). When the section is
 disabled (default) the registry delegates to the stock `DefaultProviderRegistry`
-and the Kiro path is unchanged.
+and the Kiro path is unchanged. The `api_key` field is marked `sensitive=True` so
+it is masked (`••••••••`) in the `GET /api/config/kirocrew` response and never
+rendered back into the browser; the Settings → Chat → OpenAI-Compatible Endpoint
+section (ChatPanel) edits all five keys via `PATCH /api/config/kirocrew`
+(`agent.openai_compatible.*`, allowlisted in `_EDITABLE_CONFIG`). Flipping
+`enabled` takes effect at the next gateway start (the registry is selected at
+boot); the endpoint fields hot-reload new sessions via `refresh_defaults`.
 
 **Security:** every tool call passes through the same
 `HookManager.on_tool_call` gate the ACP path uses, via `GatedToolExecutor`

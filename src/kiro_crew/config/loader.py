@@ -1309,7 +1309,8 @@ class OpenAICompatibleConfig:
         metadata=_meta(
             "API Key",
             "Bearer token for the endpoint. May be empty for local endpoints "
-            "that need none (Ollama). Stored in config.json like other keys.",
+            "that need none (Ollama). Masked in the dashboard API response.",
+            sensitive=True,
         ),
     )
     model: str = field(

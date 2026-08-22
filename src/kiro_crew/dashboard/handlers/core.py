@@ -1598,6 +1598,29 @@ _MOVED_CONFIG_FIELDS: dict[str, str] = {
 
 _EDITABLE_CONFIG: dict[str, dict] = {
     "agent.provider": {"type": "enum", "values": ["acp"]},
+    # Optional OpenAI-compatible endpoint backend (Settings > Chat > Provider).
+    # Toggling `enabled` on swaps the ProviderRegistry seam to the OpenAI
+    # factory at the next gateway start; agent.provider itself stays "acp"
+    # (harness-parity H2). base_url/api_key/model/context_window are the
+    # endpoint's chat/completions settings.
+    "agent.openai_compatible.enabled": {"type": "bool"},
+    "agent.openai_compatible.base_url": {
+        "type": "str",
+        "max_len": 512,
+    },
+    "agent.openai_compatible.api_key": {
+        "type": "str",
+        "max_len": 512,
+    },
+    "agent.openai_compatible.model": {
+        "type": "str",
+        "max_len": 128,
+    },
+    "agent.openai_compatible.context_window": {
+        "type": "int",
+        "min": 0,
+        "max": 2000000,
+    },
     # Default model for new sessions. Membership can NOT be validated against a
     # fixed list: the real vocabulary is whatever the live kiro-cli advertises
     # (/api/models spawns it to find out), and it spans both canonical registry
@@ -2072,6 +2095,17 @@ async def api_kirocrew_config_patch(request: web.Request) -> web.Response:
         logger.info(
             "Provider switched to %s — config rebuilt, factory reloaded, slot models cleared", value
         )
+
+    # The OpenAI-compatible endpoint is selected at gateway boot (the
+    # ProviderRegistry seam). Flipping it on/off takes effect after a restart;
+    # but the endpoint fields (base_url/model/etc.) can hot-reload the factory
+    # so new sessions pick them up without one. ``reload_provider_factory`` is
+    # correct here (it clears sessions) only for a real provider swap, so mirror
+    # the ``agent.model`` behaviour with ``refresh_defaults`` instead.
+    if path_key.startswith("agent.openai_compatible."):
+        state = request.app["state"]
+        await state.sessions.refresh_defaults()
+        logger.info("%s set to %r — openai-compatible endpoint defaults refreshed", path_key, value)
 
     # The default model and default reasoning effort are captured when the
     # provider factory is built (at gateway startup), so a config write alone

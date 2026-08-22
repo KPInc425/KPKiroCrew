@@ -10779,7 +10779,22 @@
         "which_model_new_sessions_start_with_pick_a_model": "কোনো এজেন্ট নিজের মডেল না বাঁধলে নতুন সেশন কোন মডেল দিয়ে শুরু হবে। প্রতিটি এজেন্টের জন্য মডেল ঠিক করতে এজেন্ট সক্ষমতা → এজেন্ট-এ যাও, বা কোনো নির্দিষ্ট সেশনে তা বদলাতে সেই সেশনের ভিতরে একটি মডেল বেছে নাও।",
         "which_part_of_a_subagent_s_stream_to_keep_when_i": "প্যারেন্ট সেশনে সাবএজেন্টের সমাপ্তি ইভেন্ট ইনজেক্ট করার সময় তার স্ট্রিমের কোন অংশ রাখা হবে। Head শুরুর অংশ রাখে (ডিফল্ট, পুরোনো আচরণের সঙ্গে মেলে)। Tail চূড়ান্ত সারসংক্ষেপ রাখে। Both দুই প্রান্ত থেকেই একটি অংশ রাখে এবং মাঝে একটি মার্কার বসায়।",
         "widget_density": "উইজেট ঘনত্ব",
-        "your_role": "আপনার ভূমিকা"
+        "your_role": "আপনার ভূমিকা",
+        "openai_compatible_endpoint": "OpenAI-Compatible Endpoint",
+        "use_openai_compatible_endpoint": "Use an OpenAI-compatible endpoint",
+        "route_the_agent_model_to_any_v1_chat_comple": "Route the agent model to any /v1/chat/completions endpoint (Ollama, vLLM, LiteLLM, etc.) instead of kiro-cli / Bedrock. Takes effect on the next gateway start.",
+        "base_url": "Base URL",
+        "ollama_example_http_localhost_11434_v1": "e.g. http://localhost:11434/v1 (Ollama) or https://api.openai.com/v1",
+        "api_key": "API Key",
+        "api_key_placeholder": "Enter API key (leave blank for endpoints that need none)",
+        "optional_for_local_endpoints_that_need_none": "Optional — local endpoints like Ollama need no key. Masked in the dashboard.",
+        "model_id": "Model ID",
+        "model_name_your_endpoint_expects": "Model name your endpoint expects (e.g. qwen2.5:14b, gpt-4o). Empty falls back to the endpoint default.",
+        "model_id_placeholder": "e.g. qwen2.5:14b",
+        "context_window_tokens": "Context Window (tokens)",
+        "optional_context_window_in_tokens_0_unknown": "Optional model context window in tokens, used for the token meter. 0 = unknown.",
+        "openai_compatible_restart_hint": "Toggling this provider requires a gateway restart. Endpoint fields apply to new sessions after saving.",
+        "failed_to_save_openai_compatible": "Failed to save the OpenAI-compatible endpoint settings."
       },
       "computerUsePanel": {
         "accessibility": "সহজগম্যতা",

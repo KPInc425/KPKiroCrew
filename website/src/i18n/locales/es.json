@@ -10903,7 +10903,22 @@
         "which_model_new_sessions_start_with_pick_a_model": "Con qué modelo empiezan las sesiones nuevas cuando su agente no tiene uno propio. Define un modelo por agente en Capacidades → Agentes, o elige uno dentro de una sesión para cambiarlo solo allí.",
         "which_part_of_a_subagent_s_stream_to_keep_when_i": "Qué parte del flujo de un subagente se conserva al inyectar su evento de finalización en la sesión principal. Inicio conserva el comienzo (predeterminado, igual que el comportamiento anterior). Cola conserva el resumen final. Ambos conserva un fragmento de cada extremo con un marcador entre ellos.",
         "widget_density": "Densidad de widgets",
-        "your_role": "Tu rol"
+        "your_role": "Tu rol",
+        "openai_compatible_endpoint": "OpenAI-Compatible Endpoint",
+        "use_openai_compatible_endpoint": "Use an OpenAI-compatible endpoint",
+        "route_the_agent_model_to_any_v1_chat_comple": "Route the agent model to any /v1/chat/completions endpoint (Ollama, vLLM, LiteLLM, etc.) instead of kiro-cli / Bedrock. Takes effect on the next gateway start.",
+        "base_url": "Base URL",
+        "ollama_example_http_localhost_11434_v1": "e.g. http://localhost:11434/v1 (Ollama) or https://api.openai.com/v1",
+        "api_key": "API Key",
+        "api_key_placeholder": "Enter API key (leave blank for endpoints that need none)",
+        "optional_for_local_endpoints_that_need_none": "Optional — local endpoints like Ollama need no key. Masked in the dashboard.",
+        "model_id": "Model ID",
+        "model_name_your_endpoint_expects": "Model name your endpoint expects (e.g. qwen2.5:14b, gpt-4o). Empty falls back to the endpoint default.",
+        "model_id_placeholder": "e.g. qwen2.5:14b",
+        "context_window_tokens": "Context Window (tokens)",
+        "optional_context_window_in_tokens_0_unknown": "Optional model context window in tokens, used for the token meter. 0 = unknown.",
+        "openai_compatible_restart_hint": "Toggling this provider requires a gateway restart. Endpoint fields apply to new sessions after saving.",
+        "failed_to_save_openai_compatible": "Failed to save the OpenAI-compatible endpoint settings."
       },
       "computerUsePanel": {
         "accessibility": "Accesibilidad",

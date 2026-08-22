@@ -160,6 +160,13 @@ export function ChatPanel() {
       soft_stop_budget_secs?: number
       completion_keep?: CompletionKeepMode
       completion_keep_chars?: number
+      openai_compatible?: {
+        enabled?: boolean
+        base_url?: string
+        api_key?: string
+        model?: string
+        context_window?: number
+      }
     }
     dashboard?: { user_role?: string; user_role_other?: string; user_technical_level?: string; prevent_sleep?: boolean }
   }>({
@@ -248,6 +255,26 @@ export function ChatPanel() {
     }
   }, [mcQ.data])
 
+  // OpenAI-compatible endpoint fields that commit on blur (not per keystroke) to
+  // avoid PATCHing a half-typed value, mirroring the role-other field above.
+  // The api_key is masked on read-back ("••••••••"), so it is seeded once and
+  // never re-seeded from a masked response, which would clobber an in-progress
+  // edit with the mask sentinel.
+  const [openaiKeyLocal, setOpenaiKeyLocal] = useState('')
+  const [openaiModelLocal, setOpenaiModelLocal] = useState('')
+  const openaiKeySeededRef = useRef(false)
+  useEffect(() => {
+    const key = mcQ.data?.agent?.openai_compatible?.api_key ?? ''
+    const model = mcQ.data?.agent?.openai_compatible?.model ?? ''
+    if (!openaiKeySeededRef.current) {
+      openaiKeySeededRef.current = true
+      // A masked value (not '' and not a literal secret the user just typed)
+      // means the real key is already stored — leave the field blank.
+      setOpenaiKeyLocal(key.startsWith('•') ? '' : key)
+    }
+    setOpenaiModelLocal(model)
+  }, [mcQ.data?.agent?.openai_compatible?.api_key, mcQ.data?.agent?.openai_compatible?.model])
+
   const keepCharsMut = useMutation({
     mutationFn: (n: number) => api.patchConfig('agent.completion_keep_chars', n),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['kirocrewConfig'] }),
@@ -294,6 +321,38 @@ export function ChatPanel() {
     mutationFn: (v: string) => api.patchConfig('agent.reasoning_effort', v),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['kirocrewConfig'] }),
     onError: () => setSaveError(i18nT('pages.settings.chatPanel.failed_to_save_default_reasoning_effort')),
+  })
+
+  // ── OpenAI-compatible endpoint (agent.openai_compatible) ──
+  // Optional swap from kiro-cli/Bedrock to any /v1/chat/completions endpoint
+  // (Ollama, vLLM, LiteLLM, …). Selected via the ProviderRegistry seam at the
+  // next gateway start; agent.provider stays "acp". Flipping `enabled` requires
+  // a restart; the endpoint fields hot-reload new sessions.
+  const openaiEnabled = mcCfg?.agent?.openai_compatible?.enabled ?? false
+  const openaiMut = useMutation({
+    mutationFn: (v: boolean) => api.patchConfig('agent.openai_compatible.enabled', v),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kirocrewConfig'] }),
+    onError: () => setSaveError(i18nT('pages.settings.chatPanel.failed_to_save_openai_compatible')),
+  })
+  const openaiBaseMut = useMutation({
+    mutationFn: (v: string) => api.patchConfig('agent.openai_compatible.base_url', v),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kirocrewConfig'] }),
+    onError: () => setSaveError(i18nT('pages.settings.chatPanel.failed_to_save_openai_compatible')),
+  })
+  const openaiKeyMut = useMutation({
+    mutationFn: (v: string) => api.patchConfig('agent.openai_compatible.api_key', v),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kirocrewConfig'] }),
+    onError: () => setSaveError(i18nT('pages.settings.chatPanel.failed_to_save_openai_compatible')),
+  })
+  const openaiModelMut = useMutation({
+    mutationFn: (v: string) => api.patchConfig('agent.openai_compatible.model', v),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kirocrewConfig'] }),
+    onError: () => setSaveError(i18nT('pages.settings.chatPanel.failed_to_save_openai_compatible')),
+  })
+  const openaiCtxMut = useMutation({
+    mutationFn: (v: number) => api.patchConfig('agent.openai_compatible.context_window', v),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kirocrewConfig'] }),
+    onError: () => setSaveError(i18nT('pages.settings.chatPanel.failed_to_save_openai_compatible')),
   })
 
   // ── Per-role model defaults (agent.role_models) ──
@@ -450,6 +509,67 @@ export function ChatPanel() {
             onChange={v => subagentEffortMut.mutate(v)}
             disabled={!mcQ.isSuccess || !subEffortSupported}
           />
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title={i18nT('pages.settings.chatPanel.openai_compatible_endpoint')}>
+        <SettingsCard>
+          <SettingsToggle
+            label={i18nT('pages.settings.chatPanel.use_openai_compatible_endpoint')}
+            description={i18nT('pages.settings.chatPanel.route_the_agent_model_to_any_v1_chat_comple')}
+            checked={openaiEnabled}
+            onChange={v => openaiMut.mutate(v)}
+            disabled={!mcQ.isSuccess}
+            configKey="agent.openai_compatible.enabled"
+          />
+          {openaiEnabled && (
+            <>
+              <SettingsInput
+                label={i18nT('pages.settings.chatPanel.base_url')}
+                description={i18nT('pages.settings.chatPanel.ollama_example_http_localhost_11434_v1')}
+                placeholder="http://localhost:11434/v1"
+                value={mcCfg?.agent?.openai_compatible?.base_url ?? ''}
+                onChange={v => openaiBaseMut.mutate(v)}
+                disabled={!mcQ.isSuccess}
+              />
+              <SettingsInput
+                label={i18nT('pages.settings.chatPanel.api_key')}
+                description={i18nT('pages.settings.chatPanel.optional_for_local_endpoints_that_need_none')}
+                placeholder={i18nT('pages.settings.chatPanel.api_key_placeholder')}
+                type="password"
+                value={openaiKeyLocal}
+                onChange={(v) => {
+                  // Avoid PATCHing on every keystroke of a typed secret; commit
+                  // on blur via the sibling handler below.
+                  setOpenaiKeyLocal(v)
+                }}
+                onBlur={() => {
+                  if (openaiKeyLocal) openaiKeyMut.mutate(openaiKeyLocal)
+                }}
+                disabled={!mcQ.isSuccess}
+              />
+              <SettingsInput
+                label={i18nT('pages.settings.chatPanel.model_id')}
+                description={i18nT('pages.settings.chatPanel.model_name_your_endpoint_expects')}
+                placeholder={i18nT('pages.settings.chatPanel.model_id_placeholder')}
+                value={openaiModelLocal}
+                onChange={(v) => {
+                  setOpenaiModelLocal(v)
+                }}
+                onBlur={() => openaiModelMut.mutate(openaiModelLocal)}
+                disabled={!mcQ.isSuccess}
+              />
+              <SettingsInput
+                label={i18nT('pages.settings.chatPanel.context_window_tokens')}
+                description={i18nT('pages.settings.chatPanel.optional_context_window_in_tokens_0_unknown')}
+                type="number"
+                value={String(mcCfg?.agent?.openai_compatible?.context_window ?? 0)}
+                onChange={(v) => openaiCtxMut.mutate(Number(v) || 0)}
+                disabled={!mcQ.isSuccess}
+              />
+              <div className="text-[12px] text-muted">{i18nT('pages.settings.chatPanel.openai_compatible_restart_hint')}</div>
+            </>
+          )}
         </SettingsCard>
       </SettingsSection>
 
