@@ -124,7 +124,12 @@ class OpenAICompatibleProvider(LLMProvider):
         return self._last_pct
 
     def context_window_tokens(self) -> int:
-        return self._context_window
+        # Model-aware window: the configured ``context_window`` is a fallback,
+        # but these are cloud models whose real window far exceeds a local
+        # default. Resolve from the known-model map first so the dashboard meter
+        # and compaction heuristics use the actual window per model, then fall
+        # back to the operator's configured value.
+        return _model_window(self._model) or self._context_window
 
     def context_used_tokens(self) -> int:
         return self._input_tokens + self._output_tokens
@@ -305,9 +310,10 @@ class OpenAICompatibleProvider(LLMProvider):
         usage = body.get("usage") or {}
         self._input_tokens = int(usage.get("prompt_tokens") or 0)
         self._output_tokens = int(usage.get("completion_tokens") or 0)
-        if self._context_window:
+        window = self.context_window_tokens()
+        if window:
             total = self._input_tokens + self._output_tokens
-            self._last_pct = round(min(1.0, total / self._context_window) * 100, 1)
+            self._last_pct = round(min(1.0, total / window) * 100, 1)
         return {
             "content": msg.get("content") or "",
             "tool_calls": msg.get("tool_calls") or [],
@@ -344,6 +350,31 @@ def _tool_kind_for(tool_name: str) -> str:
     if tool_name in ("write", "edit"):
         return "edit"
     return tool_name
+
+
+def _model_window(model: str) -> int:
+    """Context window in tokens for a known model, or 0 if unknown.
+
+    Cloud models (served through the local Ollama proxy) carry large windows;
+    local models are smaller. Return 0 for an unknown model so callers fall back
+    to the operator's configured ``context_window``. A single config value cannot
+    serve both a 256K and a 1M model correctly, so the known-model map wins when
+    present.
+    """
+    m = (model or "").lower()
+    if "gemma4" in m and "e4b" not in m:
+        return 256 * 1024
+    if "deepseek-v4-flash" in m:
+        return 1_000_000
+    if "deepseek-v4-pro" in m:
+        return 1_000_000
+    if "kimi-k2.7" in m or "kimi-k2.6" in m or "kimi-k3" in m:
+        return 256 * 1024
+    if "glm-5" in m:
+        return 256 * 1024
+    if "qwen3.5" in m:
+        return 256 * 1024
+    return 0
 
 
 def _tool_specs() -> list[dict[str, Any]]:

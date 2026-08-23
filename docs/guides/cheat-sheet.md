@@ -36,14 +36,19 @@ Restart the gateway after a model change (the provider is selected at boot).
 
 Useful models on this host (from `curl http://localhost:11434/v1/models`):
 
-| Model | Use for |
-|---|---|
-| `gemma4:cloud` | Default — general assistant |
-| `deepseek-v4-flash:cloud` | Fast coding |
-| `deepseek-v4-pro:cloud` | Heavier coding/reasoning |
-| `kimi-k2.6:cloud` / `kimi-k2.7-code:cloud` | Long-context / coding |
-| `qwen3.5:latest` | Local (no cloud) fallback |
-| `nomic-embed-text:latest` | Embeddings (local) |
+| Model | Context | Use for |
+|---|---|---|
+| `gemma4:cloud` | 256K | Default — general assistant |
+| `deepseek-v4-flash:cloud` | 1M | Fast coding |
+| `deepseek-v4-pro:cloud` | 1M | Heavier coding/reasoning |
+| `kimi-k2.6:cloud` / `kimi-k2.7-code:cloud` | 256K | Long-context / coding |
+| `qwen3.5:latest` | 256K | Local (no cloud) fallback |
+| `nomic-embed-text:latest` | — | Embeddings (local) |
+
+The context window is **model-aware**: the provider resolves it from the model
+(not the single configured fallback), so the dashboard token meter and
+compaction heuristics use the real window per model. Add/adjust windows in
+`_model_window()` in `src/kiro_crew/providers/openai_compatible.py`.
 
 ## Turning the OpenAI provider off (back to Bedrock)
 

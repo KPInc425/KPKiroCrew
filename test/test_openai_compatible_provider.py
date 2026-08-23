@@ -23,11 +23,31 @@ from kiro_crew.acp.types import (
     EVENT_TOOL_RESULT,
 )
 from kiro_crew.providers.openai_compatible import OpenAICompatibleProvider
+from kiro_crew.providers.openai_compatible import _model_window
 from kiro_crew.providers.openai_compatible_tools import GatedToolExecutor
 from kiro_crew.hooks import HooksConfig, HookManager
 from kiro_crew.config.loader import KiroCrewConfig
 from kiro_crew.platform.bootstrap import _select_provider_registry
 from kiro_crew.platform.defaults import DefaultProviderRegistry
+
+
+class TestModelAwareContextWindow:
+    def test_known_cloud_models_resolve_their_windows(self):
+        assert _model_window("gemma4:cloud") == 256 * 1024
+        assert _model_window("deepseek-v4-flash:cloud") == 1_000_000
+        assert _model_window("kimi-k2.7-code:cloud") == 256 * 1024
+
+    def test_unknown_model_falls_back_to_configured(self):
+        prov = OpenAICompatibleProvider(
+            base_url="http://x", api_key="", model="local-qwen", context_window=16384
+        )
+        assert prov.context_window_tokens() == 16384
+
+    def test_known_model_overrides_configured(self):
+        prov = OpenAICompatibleProvider(
+            base_url="http://x", api_key="", model="gemma4:cloud", context_window=16384
+        )
+        assert prov.context_window_tokens() == 256 * 1024
 
 
 class TestOpenAICompatibleMasking:
