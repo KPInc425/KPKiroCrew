@@ -116,9 +116,106 @@ def _default_tool_handler() -> Callable[..., Any]:
             if proc.returncode:
                 out += f"\n[exit code: {proc.returncode}]"
             return out
+        if tool_name in ("read", "write", "edit", "list_dir", "glob"):
+            return await _run_file_op(tool_name, args)
         return f"[Tool {tool_name!r} not implemented]"
 
     return _run
+
+
+async def _run_file_op(tool_name: str, args: dict) -> str:
+    """Execute a gated file operation (read/write/edit/list_dir/glob).
+
+    The ``GatedToolExecutor`` has already run ``HookManager.on_tool_call`` on
+    these args BEFORE this runs, so the sensitive-path / write-protected-config
+    checks have passed. These handlers just perform the operation; they do NOT
+    re-implement the security decision.
+    """
+    from pathlib import Path
+
+    from kiro_crew.atomic_write import atomic_write
+
+    p = args.get("path") or args.get("file_path") or ""
+    path = Path(p).expanduser() if isinstance(p, str) and p else None
+
+    if tool_name == "read":
+        if path is None or not path.exists():
+            return f"[Error: file not found: {path or '(empty path)'}]"
+        if path.is_dir():
+            return f"[Error: {path} is a directory]"
+        try:
+            content = path.read_text(encoding="utf-8", errors="replace")
+        except Exception as exc:  # noqa: BLE001
+            return f"[Error reading {path}: {exc}]"
+        lines = content.splitlines(keepends=True)
+        start = max(0, int(args.get("offset", 1)) - 1)
+        limit = args.get("limit")
+        if limit:
+            lines = lines[start : start + int(limit)]
+        else:
+            lines = lines[start:]
+        return (
+            "\n".join(f"{i + start + 1:>6}\t{l.rstrip()}" for i, l in enumerate(lines))
+            or "[empty file]"
+        )
+
+    if tool_name in ("write", "edit"):
+        if path is None:
+            return "[Error: path required]"
+        content = args.get("content") or ""
+        try:
+            if tool_name == "edit":
+                if not path.exists():
+                    return f"[Error: file not found: {path}]"
+                old = args.get("old_string") or ""
+                if not old:
+                    return "[Error: old_string required]"
+                current = path.read_text(encoding="utf-8", errors="replace")
+                count = current.count(old)
+                if count == 0:
+                    return f"[Error: old_string not found in {path}]"
+                replace_all = args.get("replace_all", False)
+                if count > 1 and not replace_all:
+                    return f"[Error: found {count} matches — use replace_all or more context]"
+                content = current.replace(old, args.get("new_string", ""), -1 if replace_all else 1)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write(path, content)
+            return f"[Wrote {len(content)} bytes to {path}]"
+        except Exception as exc:  # noqa: BLE001
+            return f"[Error writing {path}: {exc}]"
+
+    if tool_name == "list_dir":
+        if path is None or not path.exists():
+            return f"[Error: path not found: {path or '(empty)'}]"
+        if not path.is_dir():
+            return f"[Error: {path} is not a directory]"
+        try:
+            entries = sorted(path.iterdir(), key=lambda x: (x.is_file(), x.name.lower()))
+            lines = []
+            for e in entries:
+                if e.is_dir():
+                    lines.append(f"DIR  {e.name}/")
+                else:
+                    sz = e.stat().st_size
+                    sz_s = f"{sz}B" if sz < 1024 else f"{sz / 1024:.1f}KB"
+                    lines.append(f"FILE {e.name}  ({sz_s})")
+            return "\n".join(lines) or "[empty directory]"
+        except Exception as exc:  # noqa: BLE001
+            return f"[Error listing {path}: {exc}]"
+
+    if tool_name == "glob":
+        import glob as _glob_mod
+
+        pattern = args.get("pattern") or ""
+        base = Path(args.get("path") or ".").expanduser()
+        if not pattern:
+            return "[Error: pattern required]"
+        if not base.exists():
+            return f"[Error: directory not found: {base}]"
+        matches = sorted(_glob_mod.glob(str(base / pattern), recursive=True))
+        return "\n".join(matches[:200]) if matches else f"[No files matching '{pattern}']"
+
+    return f"[Tool {tool_name!r} not implemented]"
 
 
 def _popen_limited(cmd: str, bash: str | None):

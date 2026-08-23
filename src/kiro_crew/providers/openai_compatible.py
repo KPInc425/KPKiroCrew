@@ -248,7 +248,10 @@ class OpenAICompatibleProvider(LLMProvider):
         req = GatedToolRequest(
             request_id=request_id,
             tool_name=tool_name,
-            tool_kind=tool_name,
+            # The gate's write-protection (filesystem.write scope) keys on
+            # ``tool_kind == "edit"``, so a write/edit call must report that
+            # kind (matching the ACP path) rather than the bare tool name.
+            tool_kind=_tool_kind_for(tool_name),
             raw_params=args,
             command=command,
             is_shell=_is_shell_name(tool_name),
@@ -331,11 +334,23 @@ def _is_shell_name(tool_name: str) -> bool:
     return tool_name in ("execute_bash", "bash", "shell", "terminal")
 
 
+def _tool_kind_for(tool_name: str) -> str:
+    """Map a tool name onto the ACP semantic kind the gate's scopes expect.
+
+    The write-protection scope (``filesystem.write``) keys on
+    ``tool_kind == "edit"``, so write/edit calls report ``"edit"``; every other
+    tool reports its bare name (which the gate treats as a generic kind).
+    """
+    if tool_name in ("write", "edit"):
+        return "edit"
+    return tool_name
+
+
 def _tool_specs() -> list[dict[str, Any]]:
     """Declare the tool set to the model as OpenAI function-calling specs.
 
-    Kept minimal and stable for a first port; the gated executor only ever runs
-    tools whose handler is registered. Extend as handlers are added.
+    The gated executor runs only tools whose handler is registered (see
+    ``openai_registry._run_file_op``). Keep the set aligned with those handlers.
     """
     return [
         {
@@ -349,6 +364,84 @@ def _tool_specs() -> list[dict[str, Any]]:
                         "command": {"type": "string", "description": "Shell command to run"}
                     },
                     "required": ["command"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read",
+                "description": "Read a file with line numbers (offset/limit optional).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Absolute file path"},
+                        "offset": {"type": "integer", "description": "1-based start line"},
+                        "limit": {"type": "integer", "description": "Max lines"},
+                    },
+                    "required": ["path"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "write",
+                "description": "Write content to a file, creating parent dirs.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Absolute file path"},
+                        "content": {"type": "string", "description": "File content"},
+                    },
+                    "required": ["path", "content"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "edit",
+                "description": "Replace text in a file (old_string -> new_string).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Absolute file path"},
+                        "old_string": {"type": "string", "description": "Text to find"},
+                        "new_string": {"type": "string", "description": "Replacement text"},
+                        "replace_all": {
+                            "type": "boolean",
+                            "description": "Replace all occurrences",
+                        },
+                    },
+                    "required": ["path", "old_string", "new_string"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_dir",
+                "description": "List directory entries with sizes.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"path": {"type": "string", "description": "Directory path"}},
+                    "required": ["path"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "glob",
+                "description": "Find files by glob pattern under a base path.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Base directory"},
+                        "pattern": {"type": "string", "description": "Glob pattern, e.g. **/*.py"},
+                    },
+                    "required": ["pattern"],
                 },
             },
         },

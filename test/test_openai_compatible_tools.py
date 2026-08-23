@@ -10,10 +10,88 @@ from __future__ import annotations
 import asyncio
 
 from kiro_crew.hooks import HooksConfig, HookManager, TOOL_DENY
+from kiro_crew.platform.openai_registry import _run_file_op
 from kiro_crew.providers.openai_compatible_tools import (
     GatedToolExecutor,
     GatedToolRequest,
 )
+
+
+class TestGatedFileOps:
+    """The file handlers registered in the OpenAI registry (read/write/edit/etc.)."""
+
+    def _executor(self) -> GatedToolExecutor:
+        return GatedToolExecutor(HookManager(HooksConfig.from_dict({})))
+
+    @staticmethod
+    def _run(coro):
+        return asyncio.run(coro)
+
+    def test_read_returns_numbered_lines(self, tmp_path):
+        f = tmp_path / "a.txt"
+        f.write_text("line1\nline2\nline3\n")
+        out = self._run(_run_file_op("read", {"path": str(f)}))
+        assert "1\tline1" in out
+        assert "3\tline3" in out
+
+    def test_write_creates_file(self, tmp_path):
+        target = tmp_path / "sub" / "b.txt"
+        out = self._run(_run_file_op("write", {"path": str(target), "content": "hello\n"}))
+        assert "Wrote" in out
+        assert target.read_text() == "hello\n"
+
+    def test_edit_replaces_text(self, tmp_path):
+        f = tmp_path / "c.txt"
+        f.write_text("foo bar\n")
+        out = self._run(
+            _run_file_op("edit", {"path": str(f), "old_string": "foo", "new_string": "baz"})
+        )
+        assert "Wrote" in out
+        assert f.read_text() == "baz bar\n"
+
+    def test_write_to_sensitive_path_is_denied_and_handler_not_called(self):
+        # The write to ~/.ssh must be denied by the gate BEFORE the handler runs.
+        req = GatedToolRequest(
+            request_id=1,
+            tool_name="write",
+            tool_kind="edit",
+            raw_params={"path": "~/.ssh/authorized_keys", "content": "x"},
+            command=None,
+            is_shell=False,
+            handler=lambda: None,
+            session_key="",
+            agent="",
+            app="",
+            mcp_server_name="",
+            mcp_tool_name="",
+            resolved_agent="",
+        )
+        result, deny = self._run(self._executor().execute(req))
+        assert deny is not None
+        assert "sensitive" in deny.lower() or "blocked" in deny.lower()
+
+    def test_edit_to_keystone_config_is_denied(self):
+        req = GatedToolRequest(
+            request_id=1,
+            tool_name="edit",
+            tool_kind="edit",
+            raw_params={
+                "path": "~/.kiro/crew/security_policy.json",
+                "old_string": "x",
+                "new_string": "y",
+            },
+            command=None,
+            is_shell=False,
+            handler=lambda: "SHOULD NOT RUN",
+            session_key="",
+            agent="",
+            app="",
+            mcp_server_name="",
+            mcp_tool_name="",
+            resolved_agent="",
+        )
+        result, deny = self._run(self._executor().execute(req))
+        assert deny is not None
 
 
 class TestGatedToolExecutor:

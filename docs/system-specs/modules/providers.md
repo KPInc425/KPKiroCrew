@@ -57,8 +57,11 @@ boot); the endpoint fields hot-reload new sessions via `refresh_defaults`.
 (`providers/openai_compatible_tools.py`). Denied-command rules, sensitive-path /
 credential-read blocks, and the governance ceiling apply exactly as they do to
 kiro-cli — a provider that executed tools without this gate would let the agent
-read/write its own ceiling. Only `execute_bash` ships as a gated handler today;
-other tools return "not implemented" until handlers are added.
+read/write its own ceiling. Gated handlers: `execute_bash` (bounded via
+`sandbox.popen_limited`) plus file ops `read`/`write`/`edit`/`list_dir`/`glob`
+(`_run_file_op`); write/edit report `tool_kind="edit"` so the gate's
+`filesystem.write` / write-protected-config scope applies. Other tools return
+"not implemented" until handlers are added.
 
 ### LLMProvider ABC (`providers/base.py`)
 
