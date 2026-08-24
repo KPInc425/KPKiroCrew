@@ -252,7 +252,80 @@ def schemas() -> list[dict[str, Any]]:
                 "required": ["path"],
             },
         },
+        {
+            "name": "send_email",
+            "description": (
+                "Send an email via Resend. Covers plain email, and email-to-SMS "
+                "by addressing a carrier SMS gateway (e.g. 5551234567@vtext.com "
+                "for Verizon, @tmomail.net for T-Mobile, @txt.att.net for AT&T). "
+                "Requires a verified Resend sending domain. The Resend API key is "
+                "held gateway-side and never exposed to the agent. "
+                "Use for delivering a message or notification to the user's "
+                "email inbox or phone-as-email."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "to": {
+                        "type": "string",
+                        "description": "Recipient email address (or a carrier SMS gateway address for email-to-SMS).",
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "Email subject line.",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Plain-text body of the email.",
+                    },
+                    "html": {
+                        "type": "string",
+                        "description": "Optional HTML body. If omitted, text is used.",
+                    },
+                    "from": {
+                        "type": "string",
+                        "description": "Optional verified sender address. Defaults to the gateway-configured sender.",
+                    },
+                },
+                "required": ["to", "subject", "text"],
+            },
+        },
     ]
+
+
+def send_email(name: str, args: dict[str, Any]) -> str:
+    """Send an email (or email-to-SMS) via Resend through the gateway.
+
+    The Resend API key lives in the gateway's agent-isolated credential store
+    (``~/.kiro/crew/.env`` → ``RESEND_API_KEY``, deny-listed from the agent's
+    env). The agent never sees it: it calls the gateway endpoint, which reads
+    the key server-side and POSTs to Resend. This keeps the keystone invariant
+    (the agent cannot read/write its own credential material) intact.
+    """
+    to = args.get("to") or ""
+    subject = args.get("subject") or ""
+    text = args.get("text") or ""
+    if not to or not subject:
+        return "Error: to and subject are required."
+    if not text and not args.get("html"):
+        return "Error: text or html is required."
+    payload = {"to": to, "subject": subject, "text": text}
+    if args.get("html"):
+        payload["html"] = args["html"]
+    if args.get("from"):
+        payload["from"] = args["from"]
+    # Governance: outbound messaging is an exfil surface; reuse the same gate.
+    caller_session = mcp_core._resolve_session_key()
+    _chan_deny = mcp_core._deny_channel_agent_messaging(caller_session, "send_email")
+    if _chan_deny:
+        return _chan_deny
+    _gov_msg = mcp_core._vet_messaging_governance(caller_session, tool_name="send_email")
+    if _gov_msg:
+        return f"Error: {_gov_msg}"
+    resp = mcp_core._post("/api/send-email", payload)
+    if not resp.get("ok"):
+        return f"Failed: {resp}"
+    return f"Email sent to {to} (id={resp.get('id', '')})."
 
 
 def send_message(name: str, args: dict[str, Any]) -> str:
@@ -595,4 +668,5 @@ HANDLERS: dict[str, Callable[[str, dict[str, Any]], str]] = {
     "delete_message": delete_message,
     "read_slack_profile": read_slack_profile,
     "file_send": file_send,
+    "send_email": send_email,
 }

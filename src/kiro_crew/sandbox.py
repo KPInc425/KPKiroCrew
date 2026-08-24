@@ -214,6 +214,7 @@ _AGENT_DENIED_ENV_KEYS: list[str] = [
     "WEIXIN_TOKEN",
     "JIRA_API_TOKEN",
     "JIRA_TOKEN_",
+    "RESEND_API_KEY",
     "KIROCREW_OWNER_ID",
 ]
 

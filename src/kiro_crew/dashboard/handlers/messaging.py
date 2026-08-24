@@ -4420,3 +4420,109 @@ async def _wecom_config_save_locked(request: web.Request) -> web.Response:
             "verify_warning": "",
         }
     )
+
+
+async def api_send_email(request: web.Request) -> web.Response:
+    """POST /api/send-email — send an email (or email-to-SMS) via Resend.
+
+    The Resend API key is read from the gateway's agent-isolated credential
+    store (``~/.kiro/crew/.env`` → ``RESEND_API_KEY``, deny-listed from the
+    agent's env), so the agent never handles the key: it calls this endpoint
+    and the gateway performs the POST to Resend server-side. This preserves the
+    keystone invariant (the agent cannot read/write its own credential
+    material) for outbound messaging.
+
+    ``from`` is optional and defaults to a configured sender; plain ``text``
+    is required. ``to`` may be a normal email or a carrier SMS gateway address
+    for email-to-SMS.
+    """
+    from kiro_crew.security import redact_credentials, redact_exfiltration_urls
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    to = body.get("to", "")
+    subject = body.get("subject", "")
+    text = body.get("text", "")
+    html = body.get("html", "")
+    from_addr = body.get("from", "")
+    if not isinstance(to, str) or not to.strip():
+        return web.json_response({"error": "to required"}, status=400)
+    if not isinstance(subject, str) or not subject.strip():
+        return web.json_response({"error": "subject required"}, status=400)
+    if not isinstance(text, str) or (not text and not html):
+        return web.json_response({"error": "text or html required"}, status=400)
+    to = to.strip()
+    # Sanitize LLM-authored content before it leaves the backend.
+    to, _ = redact_exfiltration_urls(to)
+    to, _ = redact_credentials(to)
+    subject, _ = redact_exfiltration_urls(subject)
+    subject, _ = redact_credentials(subject)
+    text, _ = redact_exfiltration_urls(text)
+    text, _ = redact_credentials(text)
+
+    # Resolve the key from the agent-isolated credential store (env/.env).
+    key = KiroCrewConfig.load().load_credentials().get("RESEND_API_KEY", "")
+    if not key:
+        return web.json_response(
+            {"error": "RESEND_API_KEY not configured", "code": "resend_not_configured"},
+            status=503,
+        )
+
+    payload: dict[str, Any] = {
+        "from": from_addr or _DEFAULT_RESEND_SENDER,
+        "to": [to],
+        "subject": subject,
+    }
+    if html:
+        payload["html"] = html
+    else:
+        payload["text"] = text
+
+    try:
+        resp = await asyncio.to_thread(_post_resend, key, payload)
+    except Exception as exc:
+        logger.exception("send_email: Resend call failed")
+        safe = redact_credentials(str(exc))[0]
+        return web.json_response({"error": safe}, status=502)
+    if resp is None or "error" in resp:
+        return web.json_response(
+            {"error": str(resp or "unknown Resend error")},
+            status=502,
+        )
+    return web.json_response({"ok": True, "id": resp.get("id", "")})
+
+
+# Default sender for the Resend email/SMS gateway when the caller does not
+# supply ``from``. This must be a verified address/domain in the Resend
+# account or the API rejects the send. Operators override per-account in
+# config if their verified sender differs.
+_DEFAULT_RESEND_SENDER = "Kiro Crew <onboarding@resend.dev>"
+
+
+def _post_resend(api_key: str, payload: dict) -> dict | None:
+    """POST *payload* to the Resend email API (blocking; call off-loop).
+
+    Returns the parsed JSON body, or ``{"error": ...}`` on a transport or HTTP
+    failure. The key is used only here, never logged.
+    """
+    import urllib.error
+    import urllib.request
+
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(payload).encode(),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        try:
+            return {"error": exc.read().decode(errors="replace")}
+        except Exception:
+            return {"error": f"HTTP {exc.code}"}
+    except Exception as exc:
+        return {"error": str(exc)}

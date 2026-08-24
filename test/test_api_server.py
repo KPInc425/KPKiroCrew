@@ -269,6 +269,70 @@ class TestApiServerSendMessage:
             assert data["slack"] is False
 
 
+class TestApiServerSendEmail:
+    """send-email endpoint works through the API-only server, key agent-isolated."""
+
+    @pytest.mark.asyncio
+    async def test_send_email_success(self, tmp_path, monkeypatch):
+        from unittest.mock import patch
+
+        monkeypatch.setattr("kiro_crew.dashboard.state.config_dir", lambda: tmp_path)
+        monkeypatch.setattr("kiro_crew.config.loader.env_path", lambda: tmp_path / ".env")
+        # Seed the agent-isolated credential store.
+        (tmp_path / ".env").write_text("RESEND_API_KEY=re_test\n")
+        state = _make_state(tmp_path)
+        called = {}
+
+        def _fake_resend(key, payload):
+            called["key"] = key
+            called["payload"] = payload
+            return {"id": "resend-123"}
+
+        with patch(
+            "kiro_crew.dashboard.handlers.messaging._post_resend",
+            side_effect=_fake_resend,
+        ):
+            async with TestClient(TestServer(_make_api_app(state))) as client:
+                resp = await client.post(
+                    "/api/send-email",
+                    json={"to": "5551234567@vtext.com", "subject": "hi", "text": "hello"},
+                )
+                assert resp.status == 200
+                data = await resp.json()
+        assert data["ok"] is True
+        assert data["id"] == "resend-123"
+        assert called["key"] == "re_test"
+        assert called["payload"]["to"] == ["5551234567@vtext.com"]
+
+    @pytest.mark.asyncio
+    async def test_send_email_missing_key_returns_503(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("kiro_crew.dashboard.state.config_dir", lambda: tmp_path)
+        monkeypatch.setattr("kiro_crew.config.loader.env_path", lambda: tmp_path / ".env")
+        # No key anywhere — stub load_credentials to return {} so a leaked
+        # os.environ value from another test can't satisfy this one.
+        from unittest.mock import patch
+
+        state = _make_state(tmp_path)
+        with patch(
+            "kiro_crew.dashboard.handlers.messaging.KiroCrewConfig.load_credentials",
+            return_value={},
+        ):
+            async with TestClient(TestServer(_make_api_app(state))) as client:
+                resp = await client.post(
+                    "/api/send-email", json={"to": "a@b.com", "subject": "s", "text": "t"}
+                )
+                assert resp.status == 503
+
+    @pytest.mark.asyncio
+    async def test_send_email_validation(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("kiro_crew.dashboard.state.config_dir", lambda: tmp_path)
+        (tmp_path / ".env").write_text("RESEND_API_KEY=re_test\n")
+        state = _make_state(tmp_path)
+        async with TestClient(TestServer(_make_api_app(state))) as client:
+            resp = await client.post("/api/send-email", json={"subject": "no-to"})
+        assert resp.status == 400
+
+
 class TestApiServerNoUiRoutes:
     """API-only server must NOT have dashboard UI routes."""
 
